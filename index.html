@@ -30,7 +30,6 @@
             flex: 1; padding: 12px 15px; border-radius: 25px; border: 1px solid var(--border);
             background: var(--panel-bg); color: var(--text-color); font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); outline: none;
         }
-        /* 天気情報表示バー */
         #weather-bar {
             background: var(--panel-bg); padding: 6px 15px; border-radius: 15px; font-size: 13px;
             display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border);
@@ -113,18 +112,16 @@
         .btn-secondary { background: var(--btn-bg); color: var(--text-color); border: 1px solid var(--border); padding: 10px; border-radius: 10px; flex: 1; min-width: 90px; cursor: pointer; }
     </style>
     <!-- ★ Google Maps API ★ -->
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDYxuJzAJmT-QpH9H3aUZeBhIl20E92Ad0&libraries=places,geometry&v=weekly&callback=initMap" defer></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places,geometry&v=weekly&callback=initMap" defer></script>
 </head>
 <body>
 
-    <!-- アクティベーション画面 -->
     <div id="activation-overlay">
         <h2>My Travel Navi</h2>
         <p style="margin-top:20px; color:#666;">安全のため運転中の画面操作はお控えください。<br>マイク・音声案内・位置情報を有効にして開始します。</p>
         <button class="btn-start" onclick="startApp()">ナビを開始 / 許可する</button>
     </div>
 
-    <!-- 上部検索＆天気バー -->
     <div id="top-container">
         <div id="search-container">
             <input type="text" id="search-input" placeholder="目的地またはコマンド（例: 近くのコンビニ）">
@@ -138,7 +135,6 @@
     <div id="alert-banner"></div>
     <div id="map"></div>
 
-    <!-- 右下アクションボタン群 -->
     <div class="action-buttons">
         <div class="btn-circle" id="btn-mic" onclick="toggleSpeechRecognition()" title="音声入力">🎤</div>
         <div class="btn-circle" id="btn-mode" onclick="toggleMode()" title="移動手段">🚗</div>
@@ -150,10 +146,11 @@
         <div class="btn-circle" id="btn-settings" onclick="openModal('settings-modal')" title="設定">⚙️</div>
     </div>
 
-    <!-- 場所詳細カード -->
+    <!-- 拡張：目的地カード（天気表示エリアを追加） -->
     <div id="place-card">
         <h3 id="card-title">場所名</h3>
         <p id="card-address" style="font-size:12px; color:#666; margin-bottom:5px;">住所</p>
+        <p id="card-weather" style="font-size:13px; color:var(--primary); font-weight:bold; margin-bottom:10px;">天気: 取得中...</p>
         <div class="place-actions">
             <button class="btn-primary" onclick="startNavigationFromCard()">目的地に設定</button>
             <button class="btn-secondary" onclick="addWaypointFromCard()">📍 経由地に追加</button>
@@ -162,7 +159,7 @@
         </div>
     </div>
 
-    <!-- ナビゲーションパネル -->
+    <!-- 拡張：ナビゲーションパネル（到着地天気表示エリアを追加） -->
     <div id="navi-panel">
         <div class="navi-header">
             <span id="navi-eta">到着予定: --:-- (残り --km)</span>
@@ -171,7 +168,7 @@
         <div class="navi-text" id="navi-instruction">ナビゲーションを開始します</div>
         <div class="navi-subinfo">
             <span id="navi-fuel-cost">概算ガソリン代: --円</span>
-            <span id="navi-waypoints-count">経由地: 0件</span>
+            <span id="navi-dest-weather" style="color:var(--primary); font-weight:bold;">到着地: --</span>
         </div>
         <canvas id="elevation-chart"></canvas>
         <div class="navi-controls">
@@ -180,18 +177,16 @@
         </div>
     </div>
 
-    <!-- メニューモーダル -->
+    <!-- モーダル群 -->
     <div class="modal" id="menu-modal">
         <div class="modal-content">
             <span class="close-modal" onclick="closeModal('menu-modal')">×</span>
             <h3>ショートカット & 危険地点</h3>
-            
             <div class="grid-menu">
                 <div class="grid-item" onclick="routeToShortcut('home')"><i>🏠</i>自宅</div>
                 <div class="grid-item" onclick="routeToShortcut('work')"><i>🏢</i>職場</div>
                 <div class="grid-item" onclick="routeToShortcut('station')"><i>🚉</i>最寄り駅</div>
             </div>
-            
             <h4 style="margin-top:15px; border-bottom:1px solid var(--border);">周辺検索</h4>
             <div class="grid-menu">
                 <div class="grid-item" onclick="searchCategory('parking')"><i>🅿️</i>駐車場</div>
@@ -203,8 +198,6 @@
             </div>
         </div>
     </div>
-
-    <!-- お気に入りモーダル -->
     <div class="modal" id="favorites-modal">
         <div class="modal-content">
             <span class="close-modal" onclick="closeModal('favorites-modal')">×</span>
@@ -212,71 +205,41 @@
             <div id="favorites-list" style="margin-top:15px; display:flex; flex-direction:column; gap:8px;"></div>
         </div>
     </div>
-
-    <!-- 設定モーダル -->
     <div class="modal" id="settings-modal">
         <div class="modal-content">
             <span class="close-modal" onclick="closeModal('settings-modal')">×</span>
             <h3>各種設定</h3>
-            <div class="setting-row">
-                <label>音声 話速</label>
-                <input type="range" id="speech-rate" min="0.5" max="2.0" step="0.1" value="1.0" onchange="updateSettings()">
-            </div>
-            <div class="setting-row">
-                <label>音声 音量</label>
-                <input type="range" id="speech-volume" min="0" max="1" step="0.1" value="1.0" onchange="updateSettings()">
-            </div>
-            <div class="setting-row">
-                <label>燃費 (km/L)</label>
-                <input type="number" id="fuel-efficiency" value="15" style="width:70px;" onchange="updateSettings()">
-            </div>
-            <div class="setting-row">
-                <label>ガソリン価格 (円/L)</label>
-                <input type="number" id="fuel-price" value="170" style="width:70px;" onchange="updateSettings()">
-            </div>
-            <div class="setting-row">
-                <label>OpenWeather API Key</label>
-                <input type="text" id="weather-api-key" placeholder="APIキーを入力" style="width:130px;" onchange="updateSettings()">
-            </div>
+            <div class="setting-row"><label>音声 話速</label><input type="range" id="speech-rate" min="0.5" max="2.0" step="0.1" value="1.0" onchange="updateSettings()"></div>
+            <div class="setting-row"><label>音声 音量</label><input type="range" id="speech-volume" min="0" max="1" step="0.1" value="1.0" onchange="updateSettings()"></div>
+            <div class="setting-row"><label>燃費 (km/L)</label><input type="number" id="fuel-efficiency" value="15" style="width:70px;" onchange="updateSettings()"></div>
+            <div class="setting-row"><label>ガソリン価格 (円/L)</label><input type="number" id="fuel-price" value="170" style="width:70px;" onchange="updateSettings()"></div>
+            <div class="setting-row"><label>OpenWeather API Key</label><input type="text" id="weather-api-key" placeholder="APIキーを入力" style="width:130px;" onchange="updateSettings()"></div>
         </div>
     </div>
 
     <script>
-        /* ================= グローバル変数 ================= */
         let map, directionsService, directionsRenderer, placesService, elevationService;
         let trafficLayer = null, watchId = null, currentPos = null, currentHeading = 0, marker = null;
         let destination = null, selectedPlaceDetails = null, waypoints = [];
         let isNavigating = false, currentRoute = null, currentStepIndex = 0;
         let is3D = false, isAutoCenter = true, autoCenterTimeout = null, audioCtx = null;
-        let recognition = null; // 音声認識オブジェクト
+        let recognition = null; 
+        let destWeatherTimer = null; // 目的地天気の定期更新用タイマー
 
         const modes = ['DRIVING', 'BICYCLING', 'WALKING'];
         const modeIcons = ['🚗', '🚲', '🚶'];
         let currentModeIndex = 0;
-
-        const modeParams = {
-            'DRIVING': { radius: 500, reroute: 30 },
-            'BICYCLING': { radius: 300, reroute: 20 },
-            'WALKING': { radius: 200, reroute: 10 }
-        };
-
+        const modeParams = { 'DRIVING': { radius: 500, reroute: 30 }, 'BICYCLING': { radius: 300, reroute: 20 }, 'WALKING': { radius: 200, reroute: 10 } };
         let settings = { rate: 1.0, volume: 1.0, fuelEfficiency: 15, fuelPrice: 170, weatherApiKey: '' };
-        let dangerPoints = []; // 危険地点リスト [{lat, lng, name}]
+        let dangerPoints = [];
 
-        /* ================= 1. 初期化 & アプリ起動 ================= */
         function initMap() {
             const defaultPos = { lat: 34.9858, lng: 135.7587 };
-            map = new google.maps.Map(document.getElementById("map"), {
-                center: defaultPos, zoom: 15, disableDefaultUI: true, mapId: "DEMO_MAP_ID"
-            });
-
+            map = new google.maps.Map(document.getElementById("map"), { center: defaultPos, zoom: 15, disableDefaultUI: true, mapId: "DEMO_MAP_ID" });
             directionsService = new google.maps.DirectionsService();
-            directionsRenderer = new google.maps.DirectionsRenderer({
-                map: map, suppressMarkers: false, polylineOptions: { strokeColor: '#007aff', strokeWeight: 6 }
-            });
+            directionsRenderer = new google.maps.DirectionsRenderer({ map: map, suppressMarkers: false, polylineOptions: { strokeColor: '#007aff', strokeWeight: 6 } });
             placesService = new google.maps.places.PlacesService(map);
             elevationService = new google.maps.ElevationService();
-
             const input = document.getElementById("search-input");
             const autocomplete = new google.maps.places.Autocomplete(input);
             autocomplete.bindTo("bounds", map);
@@ -284,50 +247,39 @@
                 const place = autocomplete.getPlace();
                 if (place.geometry && place.geometry.location) showPlaceCard(place);
             });
-
             map.addListener('dragstart', () => {
                 isAutoCenter = false;
                 clearTimeout(autoCenterTimeout);
                 autoCenterTimeout = setTimeout(() => { if (isNavigating) isAutoCenter = true; }, 5000);
             });
-
-            loadSettings();
-            loadDangerPoints();
-            applyTimeBasedTheme();
+            loadSettings(); loadDangerPoints(); applyTimeBasedTheme();
         }
 
         async function startApp() {
             document.getElementById('activation-overlay').style.display = 'none';
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             speakText('');
-
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 try {
                     const permission = await DeviceOrientationEvent.requestPermission();
                     if (permission === 'granted') window.addEventListener('deviceorientation', handleOrientation, true);
                 } catch (e) {}
-            } else {
-                window.addEventListener('deviceorientationabsolute', handleOrientation, true);
-            }
-
+            } else { window.addEventListener('deviceorientationabsolute', handleOrientation, true); }
             try { if ('wakeLock' in navigator) await navigator.wakeLock.request('screen'); } catch (err) {}
             startTracking();
         }
 
-        /* ================= 2. GPS追跡 & 危険地点判定 ================= */
         function startTracking() {
             if (!navigator.geolocation) return;
             navigator.geolocation.watchPosition(
                 (pos) => {
                     currentPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                    const speedKmh = ((pos.coords.speed || 0) * 3.6).toFixed(1);
-                    document.getElementById('current-speed').innerText = `${speedKmh} km/h`;
-
+                    document.getElementById('current-speed').innerText = `${((pos.coords.speed || 0) * 3.6).toFixed(1)} km/h`;
                     updateMarker();
                     if (isAutoCenter) map.panTo(currentPos);
                     checkDangerPoints();
                     if (isNavigating) checkRouteProgress();
-                    fetchWeather(currentPos.lat, currentPos.lng);
+                    fetchWeatherForElement(currentPos.lat, currentPos.lng, 'weather-detail', '', true);
                 },
                 () => showAlert('GPS信号を検索中...', 'alert-warning'),
                 { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
@@ -342,199 +294,119 @@
 
         function updateMarker() {
             if (!currentPos) return;
-            const svgIcon = {
-                path: "M 0,-15 L 10,10 L 0,5 L -10,10 Z",
-                fillColor: "#007aff", fillOpacity: 1, strokeWeight: 2, strokeColor: "white",
-                rotation: currentHeading, scale: 1.5
-            };
+            const svgIcon = { path: "M 0,-15 L 10,10 L 0,5 L -10,10 Z", fillColor: "#007aff", fillOpacity: 1, strokeWeight: 2, strokeColor: "white", rotation: currentHeading, scale: 1.5 };
             if (!marker) marker = new google.maps.Marker({ position: currentPos, map: map, icon: svgIcon, zIndex: 999 });
             else { marker.setPosition(currentPos); marker.setIcon(svgIcon); }
         }
 
-        /* 危険地点（オービス等）接近チェック */
         function checkDangerPoints() {
             if (!currentPos || dangerPoints.length === 0) return;
             dangerPoints.forEach(dp => {
                 const dist = google.maps.geometry.spherical.computeDistanceBetween(currentPos, dp);
                 if (dist < 200 && !dp.alerted) {
-                    playAlertSound('warn');
-                    speakText(`注意。前方200メートル以内に${dp.name}があります。`);
-                    showAlert(`⚠️ 危険地点接近: ${dp.name}`, 'alert-danger');
-                    dp.alerted = true;
-                } else if (dist >= 300) {
-                    dp.alerted = false; // 再接近時に備えてリセット
-                }
+                    playAlertSound('warn'); speakText(`注意。前方200メートル以内に${dp.name}があります。`);
+                    showAlert(`⚠️ 危険地点接近: ${dp.name}`, 'alert-danger'); dp.alerted = true;
+                } else if (dist >= 300) { dp.alerted = false; }
             });
         }
 
-        /* ================= 3. ナビゲーション & 経由地 & コスト計算 ================= */
         function startNavigationFromCard() {
             if (!currentPos) return;
             destination = selectedPlaceDetails.geometry.location;
-            waypoints = []; // 目的地新規設定時は経由地リセット
+            waypoints = [];
             closePlaceCard();
             calculateAndDisplayRoute();
+            // ★拡張: ナビ開始時に目的地の天気追跡をスタート
+            startDestWeatherTracking(destination.lat(), destination.lng());
         }
 
         function addWaypointFromCard() {
             if (!selectedPlaceDetails) return;
             waypoints.push({ location: selectedPlaceDetails.geometry.location, stopover: true });
-            closePlaceCard();
-            speakText("経由地を追加しました");
+            closePlaceCard(); speakText("経由地を追加しました");
             if (destination) calculateAndDisplayRoute();
         }
 
         function calculateAndDisplayRoute() {
             if (!currentPos || !destination) return;
-            
             const mode = modes[currentModeIndex];
-            const request = {
-                origin: currentPos,
-                destination: destination,
-                waypoints: waypoints,
-                travelMode: google.maps.TravelMode[mode],
-                optimizeWaypoints: true
-            };
-
-            directionsService.route(request, (result, status) => {
+            directionsService.route({ origin: currentPos, destination: destination, waypoints: waypoints, travelMode: google.maps.TravelMode[mode], optimizeWaypoints: true }, (result, status) => {
                 if (status === 'OK') {
-                    directionsRenderer.setDirections(result);
-                    currentRoute = result.routes[0];
-                    isNavigating = true;
-                    currentStepIndex = 0;
-                    isAutoCenter = true;
-
+                    directionsRenderer.setDirections(result); currentRoute = result.routes[0]; isNavigating = true; currentStepIndex = 0; isAutoCenter = true;
                     document.getElementById('navi-panel').classList.add('active');
-                    updateNaviUI(currentRoute);
-                    speakText("ルート案内を開始します。");
-
-                    if (mode === 'WALKING' || mode === 'BICYCLING') drawElevation(currentRoute.overview_path);
-                    else document.getElementById('elevation-chart').style.display = 'none';
+                    updateNaviUI(currentRoute); speakText("ルート案内を開始します。");
                     if (!is3D) toggle3D();
-                } else {
-                    showAlert('ルート検索に失敗しました', 'alert-danger');
-                }
+                } else { showAlert('ルート検索に失敗しました', 'alert-danger'); }
             });
         }
 
         function updateNaviUI(route) {
-            let totalDistanceMeter = 0;
-            let totalDurationSec = 0;
-
-            route.legs.forEach(leg => {
-                totalDistanceMeter += leg.distance.value;
-                totalDurationSec += leg.duration.value;
-            });
-
-            const distanceKm = (totalDistanceMeter / 1000).toFixed(1);
-            const durationMin = Math.round(totalDurationSec / 60);
-
-            document.getElementById('navi-eta').innerText = `所要時間: 約${durationMin}分 (残り ${distanceKm}km)`;
+            let totalDist = 0, totalDur = 0;
+            route.legs.forEach(leg => { totalDist += leg.distance.value; totalDur += leg.duration.value; });
+            const distanceKm = (totalDist / 1000).toFixed(1);
+            document.getElementById('navi-eta').innerText = `所要時間: 約${Math.round(totalDur / 60)}分 (残り ${distanceKm}km)`;
             document.getElementById('navi-mode-icon').innerText = modeIcons[currentModeIndex];
-            document.getElementById('navi-waypoints-count').innerText = `経由地: ${waypoints.length}件`;
-
-            // ガソリン代概算計算 (距離km / 燃費) * 単価
             if (modes[currentModeIndex] === 'DRIVING') {
-                const cost = Math.round((distanceKm / settings.fuelEfficiency) * settings.fuelPrice);
-                document.getElementById('navi-fuel-cost').innerText = `概算ガソリン代: 約${cost}円`;
-            } else {
-                document.getElementById('navi-fuel-cost').innerText = `概算ガソリン代: --円`;
-            }
+                document.getElementById('navi-fuel-cost').innerText = `概算ガソリン代: 約${Math.round((distanceKm / settings.fuelEfficiency) * settings.fuelPrice)}円`;
+            } else { document.getElementById('navi-fuel-cost').innerText = `概算ガソリン代: --円`; }
         }
 
         function checkRouteProgress() {
             if (!currentRoute || !currentPos) return;
             const leg = currentRoute.legs[currentRoute.legs.length - 1];
-            const distToEnd = google.maps.geometry.spherical.computeDistanceBetween(currentPos, leg.end_location);
-
-            if (distToEnd < 15) {
-                playAlertSound('success');
-                speakText("目的地に到着しました。ナビゲーションを終了します。");
-                cancelNavigation();
-                return;
+            if (google.maps.geometry.spherical.computeDistanceBetween(currentPos, leg.end_location) < 15) {
+                playAlertSound('success'); speakText("目的地に到着しました。ナビゲーションを終了します。"); cancelNavigation(); return;
             }
-
-            // ステップ進行判定
             const currentLegSteps = currentRoute.legs[0].steps;
             if (currentStepIndex < currentLegSteps.length) {
                 const step = currentLegSteps[currentStepIndex];
-                const distToStep = google.maps.geometry.spherical.computeDistanceBetween(currentPos, step.start_location);
                 document.getElementById('navi-instruction').innerHTML = step.instructions;
-
-                if (distToStep < 60 && !step.spoken) {
-                    speakText("まもなく、" + stripHtml(step.instructions));
-                    step.spoken = true; currentStepIndex++;
+                if (google.maps.geometry.spherical.computeDistanceBetween(currentPos, step.start_location) < 60 && !step.spoken) {
+                    speakText("まもなく、" + stripHtml(step.instructions)); step.spoken = true; currentStepIndex++;
                 }
             }
         }
 
         function cancelNavigation() {
-            isNavigating = false; currentRoute = null; waypoints = [];
-            directionsRenderer.setDirections({routes: []});
+            isNavigating = false; currentRoute = null; waypoints = []; directionsRenderer.setDirections({routes: []});
             document.getElementById('navi-panel').classList.remove('active');
             if (is3D) toggle3D();
+            // ★拡張: ナビキャンセル時に目的地の天気追跡をストップ
+            stopDestWeatherTracking();
         }
 
-        /* ================= 4. 音声認識コマンド (Web Speech API) ================= */
         function toggleSpeechRecognition() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRecognition) {
-                alert("お使いのブラウザは音声コマンドに対応していません。"); return;
-            }
-
+            if (!SpeechRecognition) { alert("音声コマンド非対応です。"); return; }
             if (recognition) { recognition.stop(); return; }
-
-            recognition = new SpeechRecognition();
-            recognition.lang = 'ja-JP';
-            recognition.continuous = false;
-
-            recognition.onstart = () => {
-                document.getElementById('btn-mic').classList.add('listening');
-                speakText("音声コマンドを受け付けます");
-            };
-            recognition.onend = () => {
-                document.getElementById('btn-mic').classList.remove('listening');
-                recognition = null;
-            };
-            recognition.onresult = (e) => {
-                const cmd = e.results[0][0].transcript;
-                showAlert(`音声認識: "${cmd}"`, 'alert-warning');
-                processVoiceCommand(cmd);
-            };
+            recognition = new SpeechRecognition(); recognition.lang = 'ja-JP'; recognition.continuous = false;
+            recognition.onstart = () => { document.getElementById('btn-mic').classList.add('listening'); speakText("音声コマンドを受け付けます"); };
+            recognition.onend = () => { document.getElementById('btn-mic').classList.remove('listening'); recognition = null; };
+            recognition.onresult = (e) => { const cmd = e.results[0][0].transcript; showAlert(`音声認識: "${cmd}"`, 'alert-warning'); processVoiceCommand(cmd); };
             recognition.start();
         }
 
         function processVoiceCommand(cmd) {
-            if (cmd.includes("案内終了") || cmd.includes("ナビ終了") || cmd.includes("キャンセル")) {
-                cancelNavigation();
-            } else if (cmd.includes("コンビニ")) {
-                searchCategory('convenience_store');
-            } else if (cmd.includes("駐車場")) {
-                searchCategory('parking');
-            } else if (cmd.includes("ガソリンスタンド") || cmd.includes("スタンド")) {
-                searchCategory('gas_station');
-            } else if (cmd.includes("自宅")) {
-                routeToShortcut('home');
-            } else {
-                document.getElementById('search-input').value = cmd;
-                searchPlaceByQuery(cmd);
-            }
+            if (cmd.includes("終了") || cmd.includes("キャンセル")) cancelNavigation();
+            else if (cmd.includes("コンビニ")) searchCategory('convenience_store');
+            else if (cmd.includes("駐車場")) searchCategory('parking');
+            else if (cmd.includes("スタンド")) searchCategory('gas_station');
+            else if (cmd.includes("自宅")) routeToShortcut('home');
+            else { document.getElementById('search-input').value = cmd; searchPlaceByQuery(cmd); }
         }
 
         function searchPlaceByQuery(query) {
-            const req = { query: query, fields: ['name', 'geometry'] };
-            placesService.findPlaceFromQuery(req, (results, status) => {
-                if (status === google.maps.places.PlacesServiceStatus.OK && results[0]) {
-                    showPlaceCard(results[0]);
-                    map.panTo(results[0].geometry.location);
-                }
+            placesService.findPlaceFromQuery({ query: query, fields: ['name', 'geometry'] }, (results, status) => {
+                if (status === google.maps.places.PlacesServiceStatus.OK && results[0]) { showPlaceCard(results[0]); map.panTo(results[0].geometry.location); }
             });
         }
 
-        /* ================= 5. 天気API連携 (OpenWeatherMap) ================= */
-        function fetchWeather(lat, lng) {
+        /* ================= ★拡張：天気取得関連機能 ★ ================= */
+        // 指定した要素IDに天気を取得・表示する汎用関数
+        function fetchWeatherForElement(lat, lng, elementId, prefix = "", isCurrentLoc = false) {
             if (!settings.weatherApiKey) {
-                document.getElementById('weather-loc').innerText = "現在地: 天気APIキー未設定";
+                document.getElementById(elementId).innerText = prefix + "APIキー未設定";
+                if(isCurrentLoc) document.getElementById('weather-loc').innerText = "現在地: 天気APIキー未設定";
                 return;
             }
             const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${settings.weatherApiKey}&units=metric&lang=ja`;
@@ -542,124 +414,71 @@
                 .then(res => res.json())
                 .then(data => {
                     if (data.main) {
-                        document.getElementById('weather-loc').innerText = `${data.name} 付近`;
-                        document.getElementById('weather-detail').innerText = `${Math.round(data.main.temp)}℃ / ${data.weather[0].description}`;
+                        document.getElementById(elementId).innerText = `${prefix}${Math.round(data.main.temp)}℃ / ${data.weather[0].description}`;
+                        if(isCurrentLoc) document.getElementById('weather-loc').innerText = `${data.name} 付近`;
                     }
-                }).catch(() => {});
+                }).catch(() => {
+                    document.getElementById(elementId).innerText = prefix + "取得失敗";
+                });
         }
 
-        /* ================= 6. 危険地点登録・ストレージ管理 ================= */
-        function addCurrentPosAsDangerPoint() {
-            closeModal('menu-modal');
-            if (!currentPos) return;
-            const name = prompt("危険地点・注意場所の名称を入力してください:", "注意ポイント");
-            if (name) {
-                dangerPoints.push({ lat: currentPos.lat, lng: currentPos.lng, name: name });
-                localStorage.setItem('my_navi_danger_points', JSON.stringify(dangerPoints));
-                speakText("危険地点を登録しました");
+        // 目的地の天気を定期更新する処理
+        function startDestWeatherTracking(lat, lng) {
+            stopDestWeatherTracking(); // 重複防止
+            document.getElementById('navi-dest-weather').innerText = "到着地: 取得中...";
+            fetchWeatherForElement(lat, lng, 'navi-dest-weather', '到着地: ');
+            
+            // 5分（300,000ミリ秒）ごとに自動更新
+            destWeatherTimer = setInterval(() => {
+                fetchWeatherForElement(lat, lng, 'navi-dest-weather', '到着地: ');
+            }, 300000);
+        }
+
+        // 天気定期更新の停止処理
+        function stopDestWeatherTracking() {
+            if (destWeatherTimer) {
+                clearInterval(destWeatherTimer);
+                destWeatherTimer = null;
             }
-        }
-
-        function loadDangerPoints() {
-            const saved = localStorage.getItem('my_navi_danger_points');
-            if (saved) dangerPoints = JSON.parse(saved);
+            document.getElementById('navi-dest-weather').innerText = "到着地: --";
         }
 
         /* ================= ユーティリティ ================= */
-        function toggleMode() {
-            currentModeIndex = (currentModeIndex + 1) % modes.length;
-            document.getElementById('btn-mode').innerText = modeIcons[currentModeIndex];
-            if (isNavigating) calculateAndDisplayRoute();
-        }
-        function toggle3D() {
-            is3D = !is3D;
-            document.getElementById('btn-3d').classList.toggle('active');
-            map.setTilt(is3D ? 45 : 0);
-            map.setZoom(is3D ? 19 : 16);
-        }
-        function toggleTraffic() {
-            if (trafficLayer) { trafficLayer.setMap(null); trafficLayer = null; document.getElementById('btn-traffic').classList.remove('active'); }
-            else { trafficLayer = new google.maps.TrafficLayer(); trafficLayer.setMap(map); document.getElementById('btn-traffic').classList.add('active'); }
-        }
+        function toggleMode() { currentModeIndex = (currentModeIndex + 1) % modes.length; document.getElementById('btn-mode').innerText = modeIcons[currentModeIndex]; if (isNavigating) calculateAndDisplayRoute(); }
+        function toggle3D() { is3D = !is3D; document.getElementById('btn-3d').classList.toggle('active'); map.setTilt(is3D ? 45 : 0); map.setZoom(is3D ? 19 : 16); }
+        function toggleTraffic() { if (trafficLayer) { trafficLayer.setMap(null); trafficLayer = null; document.getElementById('btn-traffic').classList.remove('active'); } else { trafficLayer = new google.maps.TrafficLayer(); trafficLayer.setMap(map); document.getElementById('btn-traffic').classList.add('active'); } }
         function recenterMap() { isAutoCenter = true; if (currentPos) map.panTo(currentPos); }
-        function searchCategory(type) {
-            closeModal('menu-modal');
-            if (!currentPos) return;
-            placesService.nearbySearch({ location: currentPos, radius: modeParams[modes[currentModeIndex]].radius, type: type }, (results, status) => {
-                if (status === google.maps.places.PlacesServiceStatus.OK && results[0]) {
-                    showPlaceCard(results[0]); map.panTo(results[0].geometry.location);
-                }
-            });
-        }
+        function searchCategory(type) { closeModal('menu-modal'); if (!currentPos) return; placesService.nearbySearch({ location: currentPos, radius: modeParams[modes[currentModeIndex]].radius, type: type }, (results, status) => { if (status === google.maps.places.PlacesServiceStatus.OK && results[0]) { showPlaceCard(results[0]); map.panTo(results[0].geometry.location); } }); }
+        
         function showPlaceCard(place) {
             selectedPlaceDetails = place;
             document.getElementById('card-title').innerText = place.name;
             document.getElementById('card-address').innerText = place.formatted_address || place.vicinity || '';
+            document.getElementById('card-weather').innerText = "天気: 取得中..."; // 初期化
             document.getElementById('place-card').style.display = 'block';
+            
+            // ★拡張: カード表示時にその場所の天気を取得
+            if (place.geometry && place.geometry.location) {
+                fetchWeatherForElement(place.geometry.location.lat(), place.geometry.location.lng(), 'card-weather', '天気: ');
+            }
         }
+        
         function closePlaceCard() { document.getElementById('place-card').style.display = 'none'; }
-        function speakText(text) {
-            if (!window.speechSynthesis) return;
-            window.speechSynthesis.cancel();
-            const u = new SpeechSynthesisUtterance(text);
-            u.lang = 'ja-JP'; u.rate = settings.rate; u.volume = settings.volume;
-            window.speechSynthesis.speak(u);
-        }
-        function playAlertSound(type = 'warn') {
-            if (!audioCtx) return;
-            const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
-            osc.connect(gain); gain.connect(audioCtx.destination);
-            osc.frequency.setValueAtTime(type === 'warn' ? 440 : 523, audioCtx.currentTime);
-            gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
-            osc.start(); osc.stop(audioCtx.currentTime + 0.5);
-        }
-        function showAlert(msg, cls) {
-            const b = document.getElementById('alert-banner');
-            b.innerText = msg; b.className = cls; b.style.display = 'block';
-            setTimeout(() => { b.style.display = 'none'; }, 5000);
-        }
+        function speakText(text) { if (!window.speechSynthesis) return; window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = 'ja-JP'; u.rate = settings.rate; u.volume = settings.volume; window.speechSynthesis.speak(u); }
+        function playAlertSound(type = 'warn') { if (!audioCtx) return; const osc = audioCtx.createOscillator(), gain = audioCtx.createGain(); osc.connect(gain); gain.connect(audioCtx.destination); osc.frequency.setValueAtTime(type === 'warn' ? 440 : 523, audioCtx.currentTime); gain.gain.setValueAtTime(0.5, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5); osc.start(); osc.stop(audioCtx.currentTime + 0.5); }
+        function showAlert(msg, cls) { const b = document.getElementById('alert-banner'); b.innerText = msg; b.className = cls; b.style.display = 'block'; setTimeout(() => { b.style.display = 'none'; }, 5000); }
         function stripHtml(h) { let tmp = document.createElement("DIV"); tmp.innerHTML = h; return tmp.textContent || ""; }
         function openModal(id) { document.getElementById(id).style.display = 'flex'; }
         function closeModal(id) { document.getElementById(id).style.display = 'none'; }
         function toggleTheme() { document.body.classList.toggle('dark-mode'); }
         function applyTimeBasedTheme() { const h = new Date().getHours(); if (h < 6 || h >= 18) document.body.classList.add('dark-mode'); }
         
-        function updateSettings() {
-            settings.rate = parseFloat(document.getElementById('speech-rate').value);
-            settings.volume = parseFloat(document.getElementById('speech-volume').value);
-            settings.fuelEfficiency = parseFloat(document.getElementById('fuel-efficiency').value);
-            settings.fuelPrice = parseFloat(document.getElementById('fuel-price').value);
-            settings.weatherApiKey = document.getElementById('weather-api-key').value;
-            localStorage.setItem('my_navi_settings', JSON.stringify(settings));
-        }
-        function loadSettings() {
-            const saved = localStorage.getItem('my_navi_settings');
-            if (saved) {
-                settings = JSON.parse(saved);
-                document.getElementById('speech-rate').value = settings.rate;
-                document.getElementById('speech-volume').value = settings.volume;
-                document.getElementById('fuel-efficiency').value = settings.fuelEfficiency || 15;
-                document.getElementById('fuel-price').value = settings.fuelPrice || 170;
-                document.getElementById('weather-api-key').value = settings.weatherApiKey || '';
-            }
-        }
-        function routeToShortcut(t) {
-            closeModal('menu-modal');
-            let target = localStorage.getItem(`shortcut_${t}`);
-            if (!target) {
-                target = prompt(`${t}の住所・名称を入力してください:`);
-                if (target) localStorage.setItem(`shortcut_${t}`, target); else return;
-            }
-            searchPlaceByQuery(target);
-        }
-        function saveToFavorites() {
-            if (!selectedPlaceDetails) return;
-            let favs = JSON.parse(localStorage.getItem('my_navi_favorites') || '[]');
-            favs.push({ name: selectedPlaceDetails.name, lat: selectedPlaceDetails.geometry.location.lat(), lng: selectedPlaceDetails.geometry.location.lng() });
-            localStorage.setItem('my_navi_favorites', JSON.stringify(favs));
-            alert('お気に入りに保存しました'); closePlaceCard();
-        }
+        function updateSettings() { settings.rate = parseFloat(document.getElementById('speech-rate').value); settings.volume = parseFloat(document.getElementById('speech-volume').value); settings.fuelEfficiency = parseFloat(document.getElementById('fuel-efficiency').value); settings.fuelPrice = parseFloat(document.getElementById('fuel-price').value); settings.weatherApiKey = document.getElementById('weather-api-key').value; localStorage.setItem('my_navi_settings', JSON.stringify(settings)); }
+        function loadSettings() { const saved = localStorage.getItem('my_navi_settings'); if (saved) { settings = JSON.parse(saved); document.getElementById('speech-rate').value = settings.rate; document.getElementById('speech-volume').value = settings.volume; document.getElementById('fuel-efficiency').value = settings.fuelEfficiency || 15; document.getElementById('fuel-price').value = settings.fuelPrice || 170; document.getElementById('weather-api-key').value = settings.weatherApiKey || ''; } }
+        function addCurrentPosAsDangerPoint() { closeModal('menu-modal'); if (!currentPos) return; const name = prompt("危険地点の名称を入力:", "注意ポイント"); if (name) { dangerPoints.push({ lat: currentPos.lat, lng: currentPos.lng, name: name }); localStorage.setItem('my_navi_danger_points', JSON.stringify(dangerPoints)); speakText("危険地点を登録しました"); } }
+        function loadDangerPoints() { const saved = localStorage.getItem('my_navi_danger_points'); if (saved) dangerPoints = JSON.parse(saved); }
+        function routeToShortcut(t) { closeModal('menu-modal'); let target = localStorage.getItem(`shortcut_${t}`); if (!target) { target = prompt(`${t}の住所・名称を入力してください:`); if (target) localStorage.setItem(`shortcut_${t}`, target); else return; } searchPlaceByQuery(target); }
+        function saveToFavorites() { if (!selectedPlaceDetails) return; let favs = JSON.parse(localStorage.getItem('my_navi_favorites') || '[]'); favs.push({ name: selectedPlaceDetails.name, lat: selectedPlaceDetails.geometry.location.lat(), lng: selectedPlaceDetails.geometry.location.lng() }); localStorage.setItem('my_navi_favorites', JSON.stringify(favs)); alert('お気に入りに保存しました'); closePlaceCard(); }
     </script>
 </body>
 </html>
