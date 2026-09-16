@@ -6,10 +6,10 @@
             <div class="setting-row"><label>音声 話速</label><input type="range" id="speech-rate" min="0.5" max="2.0" step="0.1" value="1.0" onchange="updateSettings()"></div>
             <div class="setting-row"><label>音声 音量</label><input type="range" id="speech-volume" min="0" max="1" step="0.1" value="1.0" onchange="updateSettings()"></div>
             <div class="setting-row"><label>燃費 (km/L)</label><input type="number" id="fuel-efficiency" value="15" style="width:70px;" onchange="updateSettings()"></div>
-            <div class="setting-row"><label>ガソリン (円/L)</label><input type="number" id="fuel-price" value="170" style="width:70px;" onchange="updateSettings()"></div>
+            <div class="setting-row"><label>ガソリン価格 (円/L)</label><input type="number" id="fuel-price" value="170" style="width:70px;" onchange="updateSettings()"></div>
             <div class="setting-row"><label>有料回避許容時間 (分)</label><input type="number" id="toll-threshold" value="5" style="width:70px;" onchange="updateSettings()" title="有料道路と一般道の所要時間差がこの分数以内の場合、自動的に一般道を選択します。"></div>
             <div class="setting-row"><label>大通り優先 (狭い道回避)</label><input type="checkbox" id="avoid-narrow-roads" onchange="updateSettings()" style="width: 20px; height: 20px;" title="最速ルートとの差が5分以内の場合、右左折が少なく大通りを走りやすいルートを優先します。"></div>
-            <div class="setting-row"><label>天気 API Key</label><input type="text" id="weather-api-key" placeholder="OpenWeather" style="width:120px;" onchange="updateSettings()"></div>
+            <div class="setting-row"><label>OpenWeather API Key</label><input type="text" id="weather-api-key" placeholder="APIキーを入力" style="width:130px;" onchange="updateSettings()"></div>
         </div>
     </div>
 <!-- ... existing code ... -->
@@ -17,7 +17,6 @@
         const modeIcons = ['🚗', '🚲', '🚶'];
         let currentModeIndex = 0;
         const modeParams = { 'DRIVING': { radius: 500, reroute: 30 }, 'BICYCLING': { radius: 300, reroute: 20 }, 'WALKING': { radius: 200, reroute: 10 } };
-        // 設定に「有料回避許容時間(分) (tollThreshold)」と「大通り優先 (avoidNarrowRoads)」を追加
         let settings = { rate: 1.0, volume: 1.0, fuelEfficiency: 15, fuelPrice: 170, weatherApiKey: '', tollThreshold: 5, avoidNarrowRoads: true };
         let dangerPoints = [];
 <!-- ... existing code ... -->
@@ -27,7 +26,6 @@
             settings.fuelEfficiency = parseFloat(document.getElementById('fuel-efficiency').value); 
             settings.fuelPrice = parseFloat(document.getElementById('fuel-price').value); 
             settings.weatherApiKey = document.getElementById('weather-api-key').value; 
-            // 追加した有料回避設定と大通り優先設定を保存
             settings.tollThreshold = parseInt(document.getElementById('toll-threshold').value) || 5;
             settings.avoidNarrowRoads = document.getElementById('avoid-narrow-roads').checked;
             localStorage.setItem('my_navi_settings', JSON.stringify(settings)); 
@@ -37,7 +35,6 @@
             const saved = localStorage.getItem('my_navi_settings'); 
             if (saved) { 
                 settings = JSON.parse(saved); 
-                // 下位互換性確保
                 if (settings.tollThreshold === undefined) settings.tollThreshold = 5;
                 if (settings.avoidNarrowRoads === undefined) settings.avoidNarrowRoads = true;
                 
@@ -72,7 +69,7 @@
 
                 showAlert('渋滞・道路状況を考慮して最適なルートを検索中...', 'alert-warning');
 
-                // 有料道路を利用するルートと、利用しないルート（下道）を並行して検索
+                // 有料道路を利用するルートと、利用しないルート（一般道）を並行して検索
                 Promise.all([
                     new Promise(resolve => directionsService.route({ ...baseRequest, avoidTolls: false }, (result, status) => resolve({result, status}))),
                     new Promise(resolve => directionsService.route({ ...baseRequest, avoidTolls: true }, (result, status) => resolve({result, status})))
@@ -109,6 +106,98 @@
                                     let t = getDuration(routes[i]);
                                     if (t < minTime) { minTime = t; bestIdx = i; }
                                 }
+                                return bestIdx;
+                            }
+
+                            // 狭い道回避: 最速ルートから5分以内の遅れであれば、ステップ数（右左折）が最小のルートを選ぶ
+                            let minTime = Math.min(...routes.map(r => getDuration(r)));
+                            let bestIdx = 0, minSteps = Infinity;
+                            const acceptableDelaySec = 5 * 60; // 5分まで許容
+
+                            routes.forEach((route, idx) => {
+                                if (getDuration(route) <= minTime + acceptableDelaySec) {
+                                    let steps = getStepsCount(route);
+                                    if (steps < minSteps) { minSteps = steps; bestIdx = idx; }
+                                }
+                            });
+                            return bestIdx;
+                        };
+
+                        let tollRoute = null, noTollRoute = null;
+                        let tollTime = Infinity, noTollTime = Infinity;
+
+                        // 有料道路のベストルートを抽出
+                        if (tollRes.status === 'OK' && tollRes.result.routes.length > 0) {
+                            const bestIdx = selectBestRouteIndex(tollRes.result.routes);
+                            tollRoute = tollRes.result.routes[bestIdx];
+                            tollTime = getDuration(tollRoute);
+                            tollRes.result.routes = [tollRoute];
+                        }
+
+                        // 一般道のベストルートを抽出
+                        if (noTollRes.status === 'OK' && noTollRes.result.routes.length > 0) {
+                            const bestIdx = selectBestRouteIndex(noTollRes.result.routes);
+                            noTollRoute = noTollRes.result.routes[bestIdx];
+                            noTollTime = getDuration(noTollRoute);
+                            noTollRes.result.routes = [noTollRoute];
+                        }
+
+                        // 有料道路と一般道の最終比較
+                        if (tollRoute && noTollRoute) {
+                            // 一般道ルートと有料ルートの所要時間の差（分）
+                            const timeDiffMins = (noTollTime - tollTime) / 60;
+
+                            // 差が設定値以内（例: 5分以内）かつ有料の方が早い場合
+                            if (timeDiffMins > 0 && timeDiffMins <= settings.tollThreshold) {
+                                finalResult = noTollRes.result;
+                                routeMessage = `有料道路を使っても${Math.round(timeDiffMins)}分しか変わらないため、一般道を優先したルートを設定しました。`;
+                                if (settings.avoidNarrowRoads) routeMessage += "また、大通りを優先しています。";
+                                showAlert('時間差が少ないため、一般道を優先しました', 'alert-warning');
+                            } else {
+                                // 設定時間以上の差がある場合は早い方（通常は有料ルート）を採用
+                                finalResult = timeDiffMins > settings.tollThreshold ? tollRes.result : noTollRes.result;
+                                if (settings.avoidNarrowRoads) routeMessage = "大通りを優先した最適なルート案内を開始します。";
+                            }
+                        } else if (tollRoute) {
+                            finalResult = tollRes.result;
+                            if (settings.avoidNarrowRoads) routeMessage = "大通りを優先した最適なルート案内を開始します。";
+                        } else if (noTollRoute) {
+                            finalResult = noTollRes.result;
+                            if (settings.avoidNarrowRoads) routeMessage = "大通りを優先した最適なルート案内を開始します。";
+                        }
+                    }
+
+                    if (finalResult) {
+                        applyRouteResult(finalResult, routeMessage);
+                    } else {
+                        showAlert('ルート検索に失敗しました', 'alert-danger');
+                    }
+                });
+
+            } else {
+                // 自動車モード以外（自転車、徒歩）は通常のルート検索
+                directionsService.route({ origin: currentPos, destination: destination, waypoints: waypoints, travelMode: google.maps.TravelMode[mode], optimizeWaypoints: true }, (result, status) => {
+                    if (status === 'OK') {
+                        applyRouteResult(result, "ルート案内を開始します。");
+                    } else {
+                        showAlert('ルート検索に失敗しました', 'alert-danger');
+                    }
+                });
+            }
+        }
+
+        // ルート描画・開始の共通関数
+        function applyRouteResult(result, speechMsg) {
+            directionsRenderer.setDirections(result);
+            currentRoute = result.routes[0];
+            isNavigating = true;
+            currentStepIndex = 0;
+            isAutoCenter = true;
+            document.getElementById('navi-panel').classList.add('active');
+            updateNaviUI(currentRoute);
+            speakText(speechMsg);
+            if (!is3D) toggle3D();
+        }
                                 return bestIdx;
                             }
 
