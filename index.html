@@ -1,210 +1,4 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>My Travel Navi - Full Edition</title>
-    <style>
-        /* ================= CSS/デザイン設定 ================= */
-        :root {
-            --bg-color: #ffffff; --text-color: #333333; --panel-bg: rgba(255, 255, 255, 0.95);
-            --primary: #007aff; --danger: #ff3b30; --btn-bg: #f2f2f7; --border: #c6c6c8;
-        }
-        .dark-mode {
-            --bg-color: #121212; --text-color: #eeeeee; --panel-bg: rgba(30, 30, 35, 0.95);
-            --btn-bg: #2c2c2e; --border: #38383a;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        body, html { height: 100%; width: 100%; overflow: hidden; background: var(--bg-color); color: var(--text-color); }
-        
-        #map { width: 100%; height: 100%; transition: filter 0.3s; }
-        .dark-mode #map { filter: invert(90%) hue-rotate(180deg) brightness(80%) contrast(120%); }
-
-        /* 上部エリア（検索＆天気） */
-        #top-container {
-            position: absolute; top: 15px; left: 15px; right: 15px; z-index: 10;
-            display: flex; flex-direction: column; gap: 8px;
-        }
-        #search-container { display: flex; gap: 10px; }
-        #search-input {
-            flex: 1; padding: 12px 15px; border-radius: 25px; border: 1px solid var(--border);
-            background: var(--panel-bg); color: var(--text-color); font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); outline: none;
-        }
-        #weather-bar {
-            background: var(--panel-bg); padding: 6px 15px; border-radius: 15px; font-size: 13px;
-            display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border);
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-
-        #alert-banner {
-            position: absolute; top: 105px; left: 15px; right: 15px; z-index: 20;
-            padding: 10px; border-radius: 8px; text-align: center; font-weight: bold;
-            display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-        }
-        .alert-warning { background: #ffcc00; color: #000; }
-        .alert-danger { background: var(--danger); color: #fff; }
-
-        .action-buttons {
-            position: absolute; right: 15px; bottom: 200px; z-index: 10;
-            display: flex; flex-direction: column; gap: 10px;
-        }
-        .btn-circle {
-            width: 50px; height: 50px; border-radius: 50%; background: var(--panel-bg);
-            border: 1px solid var(--border); display: flex; justify-content: center; align-items: center;
-            font-size: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: pointer; color: var(--text-color);
-        }
-        .btn-circle.active { background: var(--primary); color: white; border-color: var(--primary); }
-        .btn-circle.listening { background: var(--danger); animation: pulse 1.5s infinite; color: white; }
-
-        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
-
-        #navi-panel {
-            position: absolute; bottom: 0; left: 0; width: 100%; min-height: 180px;
-            background: var(--panel-bg); border-top-left-radius: 20px; border-top-right-radius: 20px;
-            padding: 20px 15px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 10;
-            display: flex; flex-direction: column; gap: 8px; transform: translateY(100%); transition: transform 0.3s;
-        }
-        #navi-panel.active { transform: translateY(0); }
-        .navi-header { display: flex; justify-content: space-between; align-items: center; font-size: 16px; font-weight: bold; }
-        .navi-text { font-size: 20px; margin: 5px 0; min-height: 30px; font-weight: bold; }
-        .navi-subinfo { display: flex; justify-content: space-between; font-size: 13px; color: #666; }
-        .navi-controls { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; }
-        .btn-cancel { background: var(--danger); color: white; border: none; padding: 10px 20px; border-radius: 20px; font-weight: bold; font-size: 15px; cursor: pointer; }
-
-        #elevation-chart { width: 100%; height: 35px; display: none; }
-
-        .modal {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5); z-index: 100; display: none; justify-content: center; align-items: center;
-        }
-        .modal-content {
-            background: var(--panel-bg); width: 90%; max-height: 80%; border-radius: 15px; padding: 20px;
-            overflow-y: auto; color: var(--text-color); position: relative;
-        }
-        .close-modal { position: absolute; top: 15px; right: 15px; font-size: 24px; cursor: pointer; }
-        .grid-menu { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 15px; }
-        .grid-item {
-            background: var(--btn-bg); padding: 12px 5px; text-align: center; border-radius: 10px;
-            cursor: pointer; font-size: 13px; border: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; gap: 5px;
-        }
-        .grid-item i { font-size: 22px; }
-
-        #activation-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: var(--bg-color); z-index: 999; display: flex; flex-direction: column;
-            justify-content: center; align-items: center; padding: 20px; text-align: center;
-        }
-        .btn-start {
-            background: var(--primary); color: white; border: none; padding: 15px 40px;
-            border-radius: 30px; font-size: 20px; font-weight: bold; margin-top: 30px; box-shadow: 0 4px 10px rgba(0,122,255,0.4); cursor: pointer;
-        }
-
-        .setting-row { display: flex; justify-content: space-between; align-items: center; margin: 12px 0; border-bottom: 1px solid var(--border); padding-bottom: 8px;}
-        input[type="range"] { width: 50%; }
-        input[type="number"], input[type="text"] { padding: 5px; border-radius: 5px; border: 1px solid var(--border); }
-        
-        #place-card {
-            position: absolute; bottom: 20px; left: 15px; right: 15px; background: var(--panel-bg);
-            border-radius: 15px; padding: 15px; z-index: 15; box-shadow: 0 4px 10px rgba(0,0,0,0.2); display: none;
-        }
-        .place-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-        .btn-primary { background: var(--primary); color: white; border: none; padding: 10px; border-radius: 10px; flex: 1; min-width: 120px; font-weight: bold; cursor: pointer; }
-        .btn-secondary { background: var(--btn-bg); color: var(--text-color); border: 1px solid var(--border); padding: 10px; border-radius: 10px; flex: 1; min-width: 90px; cursor: pointer; }
-    </style>
-    <!-- ★ Google Maps API ★ -->
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDYxuJzAJmT-QpH9H3aUZeBhIl20E92Ad0&libraries=places,geometry&v=weekly&callback=initMap" defer></script>
-</head>
-<body>
-
-    <div id="activation-overlay">
-        <h2>My Travel Navi</h2>
-        <p style="margin-top:20px; color:#666;">安全のため運転中の画面操作はお控えください。<br>マイク・音声案内・位置情報を有効にして開始します。</p>
-        <button class="btn-start" onclick="startApp()">ナビを開始 / 許可する</button>
-    </div>
-
-    <div id="top-container">
-        <div id="search-container">
-            <input type="text" id="search-input" placeholder="目的地またはコマンド（例: 近くのコンビニ）">
-        </div>
-        <div id="weather-bar">
-            <span id="weather-loc">現在地: 天気取得中...</span>
-            <span id="weather-detail">-- ℃ / --</span>
-        </div>
-    </div>
-
-    <div id="alert-banner"></div>
-    <div id="map"></div>
-
-    <div class="action-buttons">
-        <div class="btn-circle" id="btn-mic" onclick="toggleSpeechRecognition()" title="音声入力">🎤</div>
-        <div class="btn-circle" id="btn-mode" onclick="toggleMode()" title="移動手段">🚗</div>
-        <div class="btn-circle" id="btn-3d" onclick="toggle3D()" title="3D視点">3D</div>
-        <div class="btn-circle" id="btn-traffic" onclick="toggleTraffic()" title="渋滞情報">🚦</div>
-        <div class="btn-circle" id="btn-recenter" onclick="recenterMap()" title="現在地へ">🎯</div>
-        <div class="btn-circle" id="btn-theme" onclick="toggleTheme()" title="昼夜切替">🌙</div>
-        <div class="btn-circle" id="btn-menu" onclick="openModal('menu-modal')" title="メニュー">🔍</div>
-        <div class="btn-circle" id="btn-settings" onclick="openModal('settings-modal')" title="設定">⚙️</div>
-    </div>
-
-    <!-- 拡張：目的地カード（天気表示エリアを追加） -->
-    <div id="place-card">
-        <h3 id="card-title">場所名</h3>
-        <p id="card-address" style="font-size:12px; color:#666; margin-bottom:5px;">住所</p>
-        <p id="card-weather" style="font-size:13px; color:var(--primary); font-weight:bold; margin-bottom:10px;">天気: 取得中...</p>
-        <div class="place-actions">
-            <button class="btn-primary" onclick="startNavigationFromCard()">目的地に設定</button>
-            <button class="btn-secondary" onclick="addWaypointFromCard()">📍 経由地に追加</button>
-            <button class="btn-secondary" onclick="saveToFavorites()">★ お気に入り</button>
-            <button class="btn-secondary" onclick="closePlaceCard()">閉じる</button>
-        </div>
-    </div>
-
-    <!-- 拡張：ナビゲーションパネル（到着地天気表示エリアを追加） -->
-    <div id="navi-panel">
-        <div class="navi-header">
-            <span id="navi-eta">到着予定: --:-- (残り --km)</span>
-            <span id="navi-mode-icon">🚗</span>
-        </div>
-        <div class="navi-text" id="navi-instruction">ナビゲーションを開始します</div>
-        <div class="navi-subinfo">
-            <span id="navi-fuel-cost">概算ガソリン代: --円</span>
-            <span id="navi-dest-weather" style="color:var(--primary); font-weight:bold;">到着地: --</span>
-        </div>
-        <canvas id="elevation-chart"></canvas>
-        <div class="navi-controls">
-            <button class="btn-cancel" onclick="cancelNavigation()">✕ 解除</button>
-            <span id="current-speed" style="font-weight:bold; font-size:18px;">0 km/h</span>
-        </div>
-    </div>
-
-    <!-- モーダル群 -->
-    <div class="modal" id="menu-modal">
-        <div class="modal-content">
-            <span class="close-modal" onclick="closeModal('menu-modal')">×</span>
-            <h3>ショートカット & 危険地点</h3>
-            <div class="grid-menu">
-                <div class="grid-item" onclick="routeToShortcut('home')"><i>🏠</i>自宅</div>
-                <div class="grid-item" onclick="routeToShortcut('work')"><i>🏢</i>職場</div>
-                <div class="grid-item" onclick="routeToShortcut('station')"><i>🚉</i>最寄り駅</div>
-            </div>
-            <h4 style="margin-top:15px; border-bottom:1px solid var(--border);">周辺検索</h4>
-            <div class="grid-menu">
-                <div class="grid-item" onclick="searchCategory('parking')"><i>🅿️</i>駐車場</div>
-                <div class="grid-item" onclick="searchCategory('restaurant')"><i>🍽️</i>グルメ</div>
-                <div class="grid-item" onclick="searchCategory('convenience_store')"><i>🏪</i>コンビニ</div>
-                <div class="grid-item" onclick="searchCategory('gas_station')"><i>⛽</i>ガソリン</div>
-                <div class="grid-item" onclick="openModal('favorites-modal')"><i>⭐</i>お気に入り</div>
-                <div class="grid-item" onclick="addCurrentPosAsDangerPoint()"><i>⚠️</i>危険地点登録</div>
-            </div>
-        </div>
-    </div>
-    <div class="modal" id="favorites-modal">
-        <div class="modal-content">
-            <span class="close-modal" onclick="closeModal('favorites-modal')">×</span>
-            <h3>お気に入り・登録地点</h3>
-            <div id="favorites-list" style="margin-top:15px; display:flex; flex-direction:column; gap:8px;"></div>
-        </div>
-    </div>
+<!-- ... existing code ... -->
     <div class="modal" id="settings-modal">
         <div class="modal-content">
             <span class="close-modal" onclick="closeModal('settings-modal')">×</span>
@@ -212,273 +6,178 @@
             <div class="setting-row"><label>音声 話速</label><input type="range" id="speech-rate" min="0.5" max="2.0" step="0.1" value="1.0" onchange="updateSettings()"></div>
             <div class="setting-row"><label>音声 音量</label><input type="range" id="speech-volume" min="0" max="1" step="0.1" value="1.0" onchange="updateSettings()"></div>
             <div class="setting-row"><label>燃費 (km/L)</label><input type="number" id="fuel-efficiency" value="15" style="width:70px;" onchange="updateSettings()"></div>
-            <div class="setting-row"><label>ガソリン価格 (円/L)</label><input type="number" id="fuel-price" value="170" style="width:70px;" onchange="updateSettings()"></div>
-            <div class="setting-row"><label>OpenWeather API Key</label><input type="text" id="weather-api-key" placeholder="APIキーを入力" style="width:130px;" onchange="updateSettings()"></div>
+            <div class="setting-row"><label>ガソリン (円/L)</label><input type="number" id="fuel-price" value="170" style="width:70px;" onchange="updateSettings()"></div>
+            <div class="setting-row"><label>有料回避許容時間 (分)</label><input type="number" id="toll-threshold" value="5" style="width:70px;" onchange="updateSettings()" title="有料道路と一般道の所要時間差がこの分数以内の場合、自動的に一般道を選択します。"></div>
+            <div class="setting-row"><label>大通り優先 (狭い道回避)</label><input type="checkbox" id="avoid-narrow-roads" onchange="updateSettings()" style="width: 20px; height: 20px;" title="最速ルートとの差が5分以内の場合、右左折が少なく大通りを走りやすいルートを優先します。"></div>
+            <div class="setting-row"><label>天気 API Key</label><input type="text" id="weather-api-key" placeholder="OpenWeather" style="width:120px;" onchange="updateSettings()"></div>
         </div>
     </div>
-
-    <script>
-        let map, directionsService, directionsRenderer, placesService, elevationService;
-        let trafficLayer = null, watchId = null, currentPos = null, currentHeading = 0, marker = null;
-        let destination = null, selectedPlaceDetails = null, waypoints = [];
-        let isNavigating = false, currentRoute = null, currentStepIndex = 0;
-        let is3D = false, isAutoCenter = true, autoCenterTimeout = null, audioCtx = null;
-        let recognition = null; 
-        let destWeatherTimer = null; // 目的地天気の定期更新用タイマー
-
+<!-- ... existing code ... -->
         const modes = ['DRIVING', 'BICYCLING', 'WALKING'];
         const modeIcons = ['🚗', '🚲', '🚶'];
         let currentModeIndex = 0;
         const modeParams = { 'DRIVING': { radius: 500, reroute: 30 }, 'BICYCLING': { radius: 300, reroute: 20 }, 'WALKING': { radius: 200, reroute: 10 } };
-        let settings = { rate: 1.0, volume: 1.0, fuelEfficiency: 15, fuelPrice: 170, weatherApiKey: '' };
+        // 設定に「有料回避許容時間(分) (tollThreshold)」と「大通り優先 (avoidNarrowRoads)」を追加
+        let settings = { rate: 1.0, volume: 1.0, fuelEfficiency: 15, fuelPrice: 170, weatherApiKey: '', tollThreshold: 5, avoidNarrowRoads: true };
         let dangerPoints = [];
-
-        function initMap() {
-            const defaultPos = { lat: 34.9858, lng: 135.7587 };
-            map = new google.maps.Map(document.getElementById("map"), { center: defaultPos, zoom: 15, disableDefaultUI: true, mapId: "DEMO_MAP_ID" });
-            directionsService = new google.maps.DirectionsService();
-            directionsRenderer = new google.maps.DirectionsRenderer({ map: map, suppressMarkers: false, polylineOptions: { strokeColor: '#007aff', strokeWeight: 6 } });
-            placesService = new google.maps.places.PlacesService(map);
-            elevationService = new google.maps.ElevationService();
-            const input = document.getElementById("search-input");
-            const autocomplete = new google.maps.places.Autocomplete(input);
-            autocomplete.bindTo("bounds", map);
-            autocomplete.addListener("place_changed", () => {
-                const place = autocomplete.getPlace();
-                if (place.geometry && place.geometry.location) showPlaceCard(place);
-            });
-            map.addListener('dragstart', () => {
-                isAutoCenter = false;
-                clearTimeout(autoCenterTimeout);
-                autoCenterTimeout = setTimeout(() => { if (isNavigating) isAutoCenter = true; }, 5000);
-            });
-            loadSettings(); loadDangerPoints(); applyTimeBasedTheme();
+<!-- ... existing code ... -->
+        function updateSettings() { 
+            settings.rate = parseFloat(document.getElementById('speech-rate').value); 
+            settings.volume = parseFloat(document.getElementById('speech-volume').value); 
+            settings.fuelEfficiency = parseFloat(document.getElementById('fuel-efficiency').value); 
+            settings.fuelPrice = parseFloat(document.getElementById('fuel-price').value); 
+            settings.weatherApiKey = document.getElementById('weather-api-key').value; 
+            // 追加した有料回避設定と大通り優先設定を保存
+            settings.tollThreshold = parseInt(document.getElementById('toll-threshold').value) || 5;
+            settings.avoidNarrowRoads = document.getElementById('avoid-narrow-roads').checked;
+            localStorage.setItem('my_navi_settings', JSON.stringify(settings)); 
         }
-
-        async function startApp() {
-            document.getElementById('activation-overlay').style.display = 'none';
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            speakText('');
-            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                try {
-                    const permission = await DeviceOrientationEvent.requestPermission();
-                    if (permission === 'granted') window.addEventListener('deviceorientation', handleOrientation, true);
-                } catch (e) {}
-            } else { window.addEventListener('deviceorientationabsolute', handleOrientation, true); }
-            try { if ('wakeLock' in navigator) await navigator.wakeLock.request('screen'); } catch (err) {}
-            startTracking();
+        
+        function loadSettings() { 
+            const saved = localStorage.getItem('my_navi_settings'); 
+            if (saved) { 
+                settings = JSON.parse(saved); 
+                // 下位互換性確保
+                if (settings.tollThreshold === undefined) settings.tollThreshold = 5;
+                if (settings.avoidNarrowRoads === undefined) settings.avoidNarrowRoads = true;
+                
+                document.getElementById('speech-rate').value = settings.rate; 
+                document.getElementById('speech-volume').value = settings.volume; 
+                document.getElementById('fuel-efficiency').value = settings.fuelEfficiency || 15; 
+                document.getElementById('fuel-price').value = settings.fuelPrice || 170; 
+                document.getElementById('weather-api-key').value = settings.weatherApiKey || ''; 
+                document.getElementById('toll-threshold').value = settings.tollThreshold;
+                document.getElementById('avoid-narrow-roads').checked = settings.avoidNarrowRoads;
+            } 
         }
-
-        function startTracking() {
-            if (!navigator.geolocation) return;
-            navigator.geolocation.watchPosition(
-                (pos) => {
-                    currentPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                    document.getElementById('current-speed').innerText = `${((pos.coords.speed || 0) * 3.6).toFixed(1)} km/h`;
-                    updateMarker();
-                    if (isAutoCenter) map.panTo(currentPos);
-                    checkDangerPoints();
-                    if (isNavigating) checkRouteProgress();
-                    fetchWeatherForElement(currentPos.lat, currentPos.lng, 'weather-detail', '', true);
-                },
-                () => showAlert('GPS信号を検索中...', 'alert-warning'),
-                { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
-            );
-        }
-
-        function handleOrientation(event) {
-            currentHeading = event.webkitCompassHeading || (360 - event.alpha) || 0;
-            updateMarker();
-            if (is3D && isAutoCenter && isNavigating) map.setHeading(currentHeading);
-        }
-
-        function updateMarker() {
-            if (!currentPos) return;
-            const svgIcon = { path: "M 0,-15 L 10,10 L 0,5 L -10,10 Z", fillColor: "#007aff", fillOpacity: 1, strokeWeight: 2, strokeColor: "white", rotation: currentHeading, scale: 1.5 };
-            if (!marker) marker = new google.maps.Marker({ position: currentPos, map: map, icon: svgIcon, zIndex: 999 });
-            else { marker.setPosition(currentPos); marker.setIcon(svgIcon); }
-        }
-
-        function checkDangerPoints() {
-            if (!currentPos || dangerPoints.length === 0) return;
-            dangerPoints.forEach(dp => {
-                const dist = google.maps.geometry.spherical.computeDistanceBetween(currentPos, dp);
-                if (dist < 200 && !dp.alerted) {
-                    playAlertSound('warn'); speakText(`注意。前方200メートル以内に${dp.name}があります。`);
-                    showAlert(`⚠️ 危険地点接近: ${dp.name}`, 'alert-danger'); dp.alerted = true;
-                } else if (dist >= 300) { dp.alerted = false; }
-            });
-        }
-
-        function startNavigationFromCard() {
-            if (!currentPos) return;
-            destination = selectedPlaceDetails.geometry.location;
-            waypoints = [];
-            closePlaceCard();
-            calculateAndDisplayRoute();
-            // ★拡張: ナビ開始時に目的地の天気追跡をスタート
-            startDestWeatherTracking(destination.lat(), destination.lng());
-        }
-
-        function addWaypointFromCard() {
-            if (!selectedPlaceDetails) return;
-            waypoints.push({ location: selectedPlaceDetails.geometry.location, stopover: true });
-            closePlaceCard(); speakText("経由地を追加しました");
-            if (destination) calculateAndDisplayRoute();
-        }
-
+<!-- ... existing code ... -->
         function calculateAndDisplayRoute() {
             if (!currentPos || !destination) return;
             const mode = modes[currentModeIndex];
-            directionsService.route({ origin: currentPos, destination: destination, waypoints: waypoints, travelMode: google.maps.TravelMode[mode], optimizeWaypoints: true }, (result, status) => {
-                if (status === 'OK') {
-                    directionsRenderer.setDirections(result); currentRoute = result.routes[0]; isNavigating = true; currentStepIndex = 0; isAutoCenter = true;
-                    document.getElementById('navi-panel').classList.add('active');
-                    updateNaviUI(currentRoute); speakText("ルート案内を開始します。");
-                    if (!is3D) toggle3D();
-                } else { showAlert('ルート検索に失敗しました', 'alert-danger'); }
-            });
-        }
-
-        function updateNaviUI(route) {
-            let totalDist = 0, totalDur = 0;
-            route.legs.forEach(leg => { totalDist += leg.distance.value; totalDur += leg.duration.value; });
-            const distanceKm = (totalDist / 1000).toFixed(1);
-            document.getElementById('navi-eta').innerText = `所要時間: 約${Math.round(totalDur / 60)}分 (残り ${distanceKm}km)`;
-            document.getElementById('navi-mode-icon').innerText = modeIcons[currentModeIndex];
-            if (modes[currentModeIndex] === 'DRIVING') {
-                document.getElementById('navi-fuel-cost').innerText = `概算ガソリン代: 約${Math.round((distanceKm / settings.fuelEfficiency) * settings.fuelPrice)}円`;
-            } else { document.getElementById('navi-fuel-cost').innerText = `概算ガソリン代: --円`; }
-        }
-
-        function checkRouteProgress() {
-            if (!currentRoute || !currentPos) return;
-            const leg = currentRoute.legs[currentRoute.legs.length - 1];
-            if (google.maps.geometry.spherical.computeDistanceBetween(currentPos, leg.end_location) < 15) {
-                playAlertSound('success'); speakText("目的地に到着しました。ナビゲーションを終了します。"); cancelNavigation(); return;
-            }
-            const currentLegSteps = currentRoute.legs[0].steps;
-            if (currentStepIndex < currentLegSteps.length) {
-                const step = currentLegSteps[currentStepIndex];
-                document.getElementById('navi-instruction').innerHTML = step.instructions;
-                if (google.maps.geometry.spherical.computeDistanceBetween(currentPos, step.start_location) < 60 && !step.spoken) {
-                    speakText("まもなく、" + stripHtml(step.instructions)); step.spoken = true; currentStepIndex++;
-                }
-            }
-        }
-
-        function cancelNavigation() {
-            isNavigating = false; currentRoute = null; waypoints = []; directionsRenderer.setDirections({routes: []});
-            document.getElementById('navi-panel').classList.remove('active');
-            if (is3D) toggle3D();
-            // ★拡張: ナビキャンセル時に目的地の天気追跡をストップ
-            stopDestWeatherTracking();
-        }
-
-        function toggleSpeechRecognition() {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRecognition) { alert("音声コマンド非対応です。"); return; }
-            if (recognition) { recognition.stop(); return; }
-            recognition = new SpeechRecognition(); recognition.lang = 'ja-JP'; recognition.continuous = false;
-            recognition.onstart = () => { document.getElementById('btn-mic').classList.add('listening'); speakText("音声コマンドを受け付けます"); };
-            recognition.onend = () => { document.getElementById('btn-mic').classList.remove('listening'); recognition = null; };
-            recognition.onresult = (e) => { const cmd = e.results[0][0].transcript; showAlert(`音声認識: "${cmd}"`, 'alert-warning'); processVoiceCommand(cmd); };
-            recognition.start();
-        }
-
-        function processVoiceCommand(cmd) {
-            if (cmd.includes("終了") || cmd.includes("キャンセル")) cancelNavigation();
-            else if (cmd.includes("コンビニ")) searchCategory('convenience_store');
-            else if (cmd.includes("駐車場")) searchCategory('parking');
-            else if (cmd.includes("スタンド")) searchCategory('gas_station');
-            else if (cmd.includes("自宅")) routeToShortcut('home');
-            else { document.getElementById('search-input').value = cmd; searchPlaceByQuery(cmd); }
-        }
-
-        function searchPlaceByQuery(query) {
-            placesService.findPlaceFromQuery({ query: query, fields: ['name', 'geometry'] }, (results, status) => {
-                if (status === google.maps.places.PlacesServiceStatus.OK && results[0]) { showPlaceCard(results[0]); map.panTo(results[0].geometry.location); }
-            });
-        }
-
-        /* ================= ★拡張：天気取得関連機能 ★ ================= */
-        // 指定した要素IDに天気を取得・表示する汎用関数
-        function fetchWeatherForElement(lat, lng, elementId, prefix = "", isCurrentLoc = false) {
-            if (!settings.weatherApiKey) {
-                document.getElementById(elementId).innerText = prefix + "APIキー未設定";
-                if(isCurrentLoc) document.getElementById('weather-loc').innerText = "現在地: 天気APIキー未設定";
-                return;
-            }
-            const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${settings.weatherApiKey}&units=metric&lang=ja`;
-            fetch(url)
-                .then(res => res.json())
-                .then(data => {
-                    if (data.main) {
-                        document.getElementById(elementId).innerText = `${prefix}${Math.round(data.main.temp)}℃ / ${data.weather[0].description}`;
-                        if(isCurrentLoc) document.getElementById('weather-loc').innerText = `${data.name} 付近`;
+            
+            if (mode === 'DRIVING') {
+                // 渋滞予測（trafficModel）を加味し、複数ルート（provideRouteAlternatives）を要求するベースリクエスト
+                const baseRequest = {
+                    origin: currentPos, 
+                    destination: destination, 
+                    waypoints: waypoints, 
+                    travelMode: google.maps.TravelMode.DRIVING, 
+                    optimizeWaypoints: true,
+                    provideRouteAlternatives: true,
+                    drivingOptions: {
+                        departureTime: new Date(),
+                        trafficModel: 'bestguess'
                     }
-                }).catch(() => {
-                    document.getElementById(elementId).innerText = prefix + "取得失敗";
+                };
+
+                showAlert('渋滞・道路状況を考慮して最適なルートを検索中...', 'alert-warning');
+
+                // 有料道路を利用するルートと、利用しないルート（下道）を並行して検索
+                Promise.all([
+                    new Promise(resolve => directionsService.route({ ...baseRequest, avoidTolls: false }, (result, status) => resolve({result, status}))),
+                    new Promise(resolve => directionsService.route({ ...baseRequest, avoidTolls: true }, (result, status) => resolve({result, status})))
+                ]).then(responses => {
+                    const tollRes = responses[0];
+                    const noTollRes = responses[1];
+                    let finalResult = null;
+                    let routeMessage = "ルート案内を開始します。";
+
+                    if (tollRes.status === 'OK' || noTollRes.status === 'OK') {
+                        // 渋滞予測（duration_in_traffic）があればそれを使って秒数を算出
+                        const getDuration = (route) => {
+                            let totalSec = 0;
+                            route.legs.forEach(leg => {
+                                totalSec += leg.duration_in_traffic ? leg.duration_in_traffic.value : leg.duration.value;
+                            });
+                            return totalSec;
+                        };
+
+                        // ルートのステップ数（右左折や案内の数）を取得
+                        const getStepsCount = (route) => {
+                            let count = 0;
+                            route.legs.forEach(leg => count += leg.steps.length);
+                            return count;
+                        };
+
+                        // 複数ルートの中から「大通り優先(狭い道回避)」のロジックに基づいて最適なものを選択する関数
+                        const selectBestRouteIndex = (routes) => {
+                            if (!routes || routes.length === 0) return -1;
+                            if (!settings.avoidNarrowRoads) {
+                                // 設定がOFFなら単に一番早いルート（渋滞考慮）を返す
+                                let bestIdx = 0, minTime = getDuration(routes[0]);
+                                for (let i = 1; i < routes.length; i++) {
+                                    let t = getDuration(routes[i]);
+                                    if (t < minTime) { minTime = t; bestIdx = i; }
+                                }
+                                return bestIdx;
+                            }
+
+                            // 狭い道回避: 最速ルートから5分以内の遅れであれば、ステップ数（右左折）が最小のルートを選ぶ
+                            let minTime = Math.min(...routes.map(r => getDuration(r)));
+                            let bestIdx = 0, minSteps = Infinity;
+                            const acceptableDelaySec = 5 * 60; // 5分まで許容
+
+                            routes.forEach((route, idx) => {
+                                if (getDuration(route) <= minTime + acceptableDelaySec) {
+                                    let steps = getStepsCount(route);
+                                    if (steps < minSteps) { minSteps = steps; bestIdx = idx; }
+                                }
+                            });
+                            return bestIdx;
+                        };
+
+                        let tollRoute = null, noTollRoute = null;
+                        let tollTime = Infinity, noTollTime = Infinity;
+
+                        // 有料道路のベストルートを抽出
+                        if (tollRes.status === 'OK' && tollRes.result.routes.length > 0) {
+                            const bestIdx = selectBestRouteIndex(tollRes.result.routes);
+                            tollRoute = tollRes.result.routes[bestIdx];
+                            tollTime = getDuration(tollRoute);
+                            tollRes.result.routes = [tollRoute]; // 描画用に選ばれたルートのみを残す
+                        }
+
+                        // 一般道のベストルートを抽出
+                        if (noTollRes.status === 'OK' && noTollRes.result.routes.length > 0) {
+                            const bestIdx = selectBestRouteIndex(noTollRes.result.routes);
+                            noTollRoute = noTollRes.result.routes[bestIdx];
+                            noTollTime = getDuration(noTollRoute);
+                            noTollRes.result.routes = [noTollRoute];
+                        }
+
+                        // 有料道路と一般道の最終比較
+                        if (tollRoute && noTollRoute) {
+                            // 下道ルートと有料ルートの所要時間の差（分）
+                            const timeDiffMins = (noTollTime - tollTime) / 60;
+
+                            // 差が設定値以内（例: 5分以内）かつ、差が0より大きい（有料ルートの方が少し早い）場合
+                            if (timeDiffMins > 0 && timeDiffMins <= settings.tollThreshold) {
+                                finalResult = noTollRes.result;
+                                routeMessage = `有料道路を使っても${Math.round(timeDiffMins)}分しか変わらないため、一般道を優先したルートを設定しました。`;
+                                if (settings.avoidNarrowRoads) routeMessage += "また、大通りを優先しています。";
+                                showAlert('時間差が少ないため、一般道を優先しました', 'alert-warning');
+                            } else {
+                                // 設定時間以上の差がある場合は早い方（通常は有料ルート）を採用
+                                finalResult = timeDiffMins > settings.tollThreshold ? tollRes.result : noTollRes.result;
+                                if (settings.avoidNarrowRoads) routeMessage = "大通りを優先した最適なルート案内を開始します。";
+                            }
+                        } else if (tollRoute) {
+                            finalResult = tollRes.result;
+                            if (settings.avoidNarrowRoads) routeMessage = "大通りを優先した最適なルート案内を開始します。";
+                        } else if (noTollRoute) {
+                            finalResult = noTollRes.result;
+                            if (settings.avoidNarrowRoads) routeMessage = "大通りを優先した最適なルート案内を開始します。";
+                        }
+                    }
+
+                    if (finalResult) {
+                        applyRouteResult(finalResult, routeMessage);
+                    } else {
+                        showAlert('ルート検索に失敗しました', 'alert-danger');
+                    }
                 });
-        }
 
-        // 目的地の天気を定期更新する処理
-        function startDestWeatherTracking(lat, lng) {
-            stopDestWeatherTracking(); // 重複防止
-            document.getElementById('navi-dest-weather').innerText = "到着地: 取得中...";
-            fetchWeatherForElement(lat, lng, 'navi-dest-weather', '到着地: ');
-            
-            // 5分（300,000ミリ秒）ごとに自動更新
-            destWeatherTimer = setInterval(() => {
-                fetchWeatherForElement(lat, lng, 'navi-dest-weather', '到着地: ');
-            }, 300000);
-        }
-
-        // 天気定期更新の停止処理
-        function stopDestWeatherTracking() {
-            if (destWeatherTimer) {
-                clearInterval(destWeatherTimer);
-                destWeatherTimer = null;
-            }
-            document.getElementById('navi-dest-weather').innerText = "到着地: --";
-        }
-
-        /* ================= ユーティリティ ================= */
-        function toggleMode() { currentModeIndex = (currentModeIndex + 1) % modes.length; document.getElementById('btn-mode').innerText = modeIcons[currentModeIndex]; if (isNavigating) calculateAndDisplayRoute(); }
-        function toggle3D() { is3D = !is3D; document.getElementById('btn-3d').classList.toggle('active'); map.setTilt(is3D ? 45 : 0); map.setZoom(is3D ? 19 : 16); }
-        function toggleTraffic() { if (trafficLayer) { trafficLayer.setMap(null); trafficLayer = null; document.getElementById('btn-traffic').classList.remove('active'); } else { trafficLayer = new google.maps.TrafficLayer(); trafficLayer.setMap(map); document.getElementById('btn-traffic').classList.add('active'); } }
-        function recenterMap() { isAutoCenter = true; if (currentPos) map.panTo(currentPos); }
-        function searchCategory(type) { closeModal('menu-modal'); if (!currentPos) return; placesService.nearbySearch({ location: currentPos, radius: modeParams[modes[currentModeIndex]].radius, type: type }, (results, status) => { if (status === google.maps.places.PlacesServiceStatus.OK && results[0]) { showPlaceCard(results[0]); map.panTo(results[0].geometry.location); } }); }
-        
-        function showPlaceCard(place) {
-            selectedPlaceDetails = place;
-            document.getElementById('card-title').innerText = place.name;
-            document.getElementById('card-address').innerText = place.formatted_address || place.vicinity || '';
-            document.getElementById('card-weather').innerText = "天気: 取得中..."; // 初期化
-            document.getElementById('place-card').style.display = 'block';
-            
-            // ★拡張: カード表示時にその場所の天気を取得
-            if (place.geometry && place.geometry.location) {
-                fetchWeatherForElement(place.geometry.location.lat(), place.geometry.location.lng(), 'card-weather', '天気: ');
-            }
-        }
-        
-        function closePlaceCard() { document.getElementById('place-card').style.display = 'none'; }
-        function speakText(text) { if (!window.speechSynthesis) return; window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = 'ja-JP'; u.rate = settings.rate; u.volume = settings.volume; window.speechSynthesis.speak(u); }
-        function playAlertSound(type = 'warn') { if (!audioCtx) return; const osc = audioCtx.createOscillator(), gain = audioCtx.createGain(); osc.connect(gain); gain.connect(audioCtx.destination); osc.frequency.setValueAtTime(type === 'warn' ? 440 : 523, audioCtx.currentTime); gain.gain.setValueAtTime(0.5, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5); osc.start(); osc.stop(audioCtx.currentTime + 0.5); }
-        function showAlert(msg, cls) { const b = document.getElementById('alert-banner'); b.innerText = msg; b.className = cls; b.style.display = 'block'; setTimeout(() => { b.style.display = 'none'; }, 5000); }
-        function stripHtml(h) { let tmp = document.createElement("DIV"); tmp.innerHTML = h; return tmp.textContent || ""; }
-        function openModal(id) { document.getElementById(id).style.display = 'flex'; }
-        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
-        function toggleTheme() { document.body.classList.toggle('dark-mode'); }
-        function applyTimeBasedTheme() { const h = new Date().getHours(); if (h < 6 || h >= 18) document.body.classList.add('dark-mode'); }
-        
-        function updateSettings() { settings.rate = parseFloat(document.getElementById('speech-rate').value); settings.volume = parseFloat(document.getElementById('speech-volume').value); settings.fuelEfficiency = parseFloat(document.getElementById('fuel-efficiency').value); settings.fuelPrice = parseFloat(document.getElementById('fuel-price').value); settings.weatherApiKey = document.getElementById('weather-api-key').value; localStorage.setItem('my_navi_settings', JSON.stringify(settings)); }
-        function loadSettings() { const saved = localStorage.getItem('my_navi_settings'); if (saved) { settings = JSON.parse(saved); document.getElementById('speech-rate').value = settings.rate; document.getElementById('speech-volume').value = settings.volume; document.getElementById('fuel-efficiency').value = settings.fuelEfficiency || 15; document.getElementById('fuel-price').value = settings.fuelPrice || 170; document.getElementById('weather-api-key').value = settings.weatherApiKey || ''; } }
-        function addCurrentPosAsDangerPoint() { closeModal('menu-modal'); if (!currentPos) return; const name = prompt("危険地点の名称を入力:", "注意ポイント"); if (name) { dangerPoints.push({ lat: currentPos.lat, lng: currentPos.lng, name: name }); localStorage.setItem('my_navi_danger_points', JSON.stringify(dangerPoints)); speakText("危険地点を登録しました"); } }
-        function loadDangerPoints() { const saved = localStorage.getItem('my_navi_danger_points'); if (saved) dangerPoints = JSON.parse(saved); }
-        function routeToShortcut(t) { closeModal('menu-modal'); let target = localStorage.getItem(`shortcut_${t}`); if (!target) { target = prompt(`${t}の住所・名称を入力してください:`); if (target) localStorage.setItem(`shortcut_${t}`, target); else return; } searchPlaceByQuery(target); }
-        function saveToFavorites() { if (!selectedPlaceDetails) return; let favs = JSON.parse(localStorage.getItem('my_navi_favorites') || '[]'); favs.push({ name: selectedPlaceDetails.name, lat: selectedPlaceDetails.geometry.location.lat(), lng: selectedPlaceDetails.geometry.location.lng() }); localStorage.setItem('my_navi_favorites', JSON.stringify(favs)); alert('お気に入りに保存しました'); closePlaceCard(); }
-    </script>
-</body>
-</html>
+            } else {
+                // 自動車モード以外（自転車、徒歩）は通常のルート検索
+                directionsService.route({ origin: currentPos, destination: destination, waypoints: waypoints, travelMode: google.maps.TravelMode[mode], optimizeWaypoints: true }, (result, status) => {
+<!-- ... existing code ... -->
